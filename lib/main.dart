@@ -1,8 +1,10 @@
-import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as ImageEdit;
+import 'package:path_provider/path_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,8 +43,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   late CameraController _controller;
   late Future<void> _initializeControllerFuture;
 
-  List<String> imagePathList = [];
-
   @override
   void initState() {
     super.initState();
@@ -78,20 +78,9 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
             // If the Future is complete, display the preview.
-            return CameraPreview(_controller,
-                child: MediaQuery.removePadding(
-                  context: context,
-                  removeTop: true,
-                  child: GridView.builder(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                      ),
-                      itemCount: imagePathList.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        return Image.file(File(imagePathList[index]));
-                      }),
-                ));
+            return CameraPreview(
+              _controller,
+            );
           } else {
             // Otherwise, display a loading indicator.
             return const Center(child: CircularProgressIndicator());
@@ -111,17 +100,95 @@ class TakePictureScreenState extends State<TakePictureScreen> {
             // where it was saved.
             final image = await _controller.takePicture();
 
+            File editImage = await addTextToImage(
+                File(image.path), ["This is test  ", "test1"]);
             if (!mounted) return;
 
-            setState(() {
-              imagePathList.add(image.path);
-            });
+            // If the picture was taken, display it on a new screen.
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => DisplayPictureScreen(
+                  // Pass the automatically generated path to
+                  // the DisplayPictureScreen widget.
+                  imagePath: editImage,
+                ),
+              ),
+            );
           } catch (e) {
             // If an error occurs, log the error to the console.
             print(e);
           }
         },
         child: const Icon(Icons.camera_alt),
+      ),
+    );
+  }
+
+  Future<File> addTextToImage(File originalImage, List<String> lines) async {
+    final image = ImageEdit.decodeImage(originalImage.readAsBytesSync());
+
+    // Define text style and position.
+    // final textStyle = TextStyle(
+    //   color: Colors.white, // Text color
+    //   fontSize: 24.0, // Text size
+    // );
+    // final textPosition = ImageEdit.Point(50, 50); // Text position (x, y)
+    // Define the initial position for the first line of text.
+    int x = 10;
+    int y = 10;
+
+    // Define the spacing between lines.
+    int lineSpacing = 30;
+    for (String line in lines) {
+      // Draw the text on the image.
+      ImageEdit.drawString(image!, line, font: ImageEdit.arial24, x: x, y: y);
+
+      // Move the position down for the next line.
+      y += lineSpacing;
+    }
+
+    final directory = await getApplicationDocumentsDirectory();
+
+    final modifiedImage =
+        File('${directory.path}/path_to_save_modified_image.png');
+    modifiedImage.writeAsBytesSync(ImageEdit.encodePng(image!));
+
+    return modifiedImage;
+  }
+  // void addTextToImage(File capturedImage, String text) {
+  //   final image = ImageEdit.decodeImage(capturedImage.readAsBytesSync());
+
+  //   // Define text style and position.
+  //   final textStyle = const TextStyle(
+  //     color: Colors.white, // Text color
+  //     fontSize: 24.0, // Text size
+  //   );
+  //   final textPosition = ImageEdit.Point(50, 50); // Text position (x, y)
+
+  //   // Draw the text on the image.
+  //   ImageEdit.drawString(image!, 'Hello World',
+  //       font: ImageEdit.arial24, x: 0, y: 0);
+
+  //   // Save the image with the added text.
+  //   File modifiedImage = File('path_to_save_modified_image.png');
+  //   modifiedImage.writeAsBytesSync(ImageEdit.encodePng(image));
+  // }
+}
+
+// A widget that displays the picture taken by the user.
+class DisplayPictureScreen extends StatelessWidget {
+  final File imagePath;
+
+  const DisplayPictureScreen({super.key, required this.imagePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Display the Picture')),
+      // The image is stored as a file on the device. Use the `Image.file`
+      // constructor with the given path to display the image.
+      body: Image.file(
+        imagePath,
       ),
     );
   }
